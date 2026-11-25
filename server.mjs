@@ -92,6 +92,13 @@ export async function handler(req, res) {
       let url;
 
       switch (resource) {
+        case "summary": {
+          const event = p.get("event");
+          if (!event || !/^\d{1,15}$/.test(event)) return send(res,400,{error:"Invalid event"});
+          url = new URL(`${SITE}/summary`);
+          url.searchParams.set("event",event);
+          break;
+        }
         case "scoreboard":
           url = new URL(`${SITE}/scoreboard`);
           url.searchParams.set("limit", "1000");

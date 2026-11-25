@@ -292,7 +292,7 @@ footer {
 }
 
 .player-tools{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.player-tools input{background:#172130;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px;min-width:180px}.player-photo{width:58px;height:42px;object-fit:contain}.player-name{display:flex;align-items:center;gap:10px;text-align:left}.player-name:hover{color:var(--blue)}.player-table th button{padding:4px;background:none;border:0;color:inherit}.player-section{margin:20px 0}.player-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.player-tabs .active{border-color:var(--blue);color:var(--blue)}
-</style>
+.game[data-game]{cursor:pointer}.game[data-game]:hover,.game[data-game]:focus-visible{outline:1px solid #70aaff}.gc-section{margin:30px 0}.gc-section h3,.gc-section h4{margin:20px 0 10px}.gc-score{display:flex;justify-content:space-around;text-align:center;padding:24px;gap:12px}.gc-score img{width:72px;height:72px;object-fit:contain}.gc-score strong{font-size:48px}.gc-score p{text-transform:uppercase}.gc-section td{white-space:normal}</style>
 </head>
 
 <body>
@@ -666,7 +666,7 @@ function gameCard(event, teamId = "") {
       </div>
     </div>` : "";
 
-  return `<article class="panel game ${live ? "live":""}">
+  return `<article class="panel game ${live ? "live":""}" data-game="${escape(event.id)}" data-origin="${escape(teamId)}" tabindex="0" role="link" aria-label="Open game details">
     <div class="game-meta">
       <span>W${val(event.week?.number)} · ${escape(dateLabel)}</span>
       <span class="${live ? "green":""}">
@@ -684,7 +684,7 @@ function gameCard(event, teamId = "") {
       };
 
       return `<div class="game-team">
-        <a href="#team/${escape(c.team.id)}">
+        <a href="#game/${escape(event.id)}${teamId?"/"+escape(teamId):""}">
           ${logo(team)}
           <span>${escape(team.name)}
             <small class="rec">${escape(compactRecord(standing))}</small>
@@ -842,7 +842,36 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-team-view]
 document.addEventListener('input',e=>{if(e.target.id==='player-search'){playerFilter=e.target.value;const caret=e.target.selectionStart;drawPlayers();$('#player-search')?.focus();$('#player-search')?.setSelectionRange(caret,caret);}});
 document.addEventListener('change',e=>{if(e.target.id==='position-filter'){positionFilter=e.target.value;drawPlayers();}if(e.target.id==='category-filter'){categoryFilter=e.target.value;sortIndex=-1;drawPlayers();}});
 
+let gameRequest=0;
+async function renderGame(id,origin){
+ const hash=location.hash, token=++gameRequest, el=$('#content');
+ const back=origin?`#team/${origin}`:'#';
+ const backLink=`<a class="back" href="${back}">← ${origin?'Team schedule':'Back to games'}</a>`;
+ if(el.dataset.game!==hash){el.innerHTML=backLink+'<div class="message">Loading game center…</div>';el.dataset.game=hash;}
+ try{
+ const response=await api('summary',{event:id}); if(location.hash!==hash||token!==gameRequest)return;
+ const d=response.data, c=d.header?.competitions?.[0]||{}, teams=[...(c.competitors||[])].sort((a,b)=>Number(a.homeAway==='home')-Number(b.homeAway==='home'));
+ const name=t=>t?.displayName||t?.shortDisplayName||t?.abbreviation||'Team';
+ const table=(headers,rows)=>`<div class="panel table-scroll"><table><thead><tr>${headers.map(x=>`<th>${escape(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(x=>`<td>${escape(x??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ const empty='<p class="notice">Not available in the game feed yet.</p>';
+ const section=(title,body)=>`<section class="gc-section"><h2>${title}</h2>${body||empty}</section>`;
+ const periods=Math.max(0,...teams.map(t=>t.linescores?.length||0));
+ const box=d.boxscore||{}, bt=teams.map(t=>(box.teams||[]).find(b=>String(b.team?.id)===String(t.team?.id)));
+ const keys=[...new Set(bt.flatMap(b=>(b?.statistics||[]).map(s=>s.name)))];
+ const teamRows=keys.map(k=>{const s=bt.map(b=>b?.statistics?.find(v=>v.name===k));return [s.find(Boolean)?.label||s.find(Boolean)?.displayName||k,...s.map(v=>v?.displayValue??v?.value??'—')];});
+ const playerHtml=(box.players||[]).map(p=>`<h3>${escape(name(p.team))}</h3>`+(p.statistics||[]).map(g=>{const rows=(g.athletes||[]).map(a=>[a.athlete?.displayName||a.athlete?.fullName||'Player',...(a.stats||[])]);return rows.length?`<h4>${escape(g.displayName||g.name||g.type)}</h4>${table(['Player',...(g.labels||g.names||[])],rows)}`:'';}).join('')).join('');
+ const plays=(d.scoringPlays||[]).map(p=>[p.period?.number,p.clock?.displayValue,p.team?.abbreviation,p.text,p.awayScore,p.homeScore]);
+ const drives=[...(d.drives?.previous||[]),...(d.drives?.current?[d.drives.current]:[])];
+ const playRows=drives.flatMap(dr=>dr.plays||[]).map(p=>[p.period?.number,p.clock?.displayValue,p.text]);
+ document.title='Game Center | NFL LIVE';
+ el.innerHTML=backLink+`<div class="eyebrow">GAME CENTER</div><h1>${escape(d.header?.competitions?.[0]?.status?.type?.description||'Game details')}</h1><div class="panel gc-score">${teams.map(t=>`<div>${logo({...t.team,logo:t.team?.logo||t.team?.logos?.[0]?.href,name:name(t.team)})}<h3>${escape(name(t.team))}</h3><strong>${escape(c.status?.type?.state==='pre'?'—':t.score??'—')}</strong><p>${escape(t.homeAway)}</p></div>`).join('')}</div><p class="muted">${escape(d.gameInfo?.venue?.fullName||'')} · ${escape(c.date?new Date(c.date).toLocaleString():'')} ${response.stale?' · Cached data':''}</p>`+section('Quarter breakdown',periods?table(['Team',...Array.from({length:periods},(_,i)=>i<4?'Q'+(i+1):'OT'+(i===4?'':i-3)),'Total'],teams.map(t=>[name(t.team),...Array.from({length:periods},(_,i)=>t.linescores?.[i]?.displayValue??t.linescores?.[i]?.value??'—'),t.score])):'')+section('Team statistics',teamRows.length?table(['Statistic',...teams.map(t=>name(t.team))],teamRows):'')+section('Player box scores',playerHtml)+section('Scoring summary',plays.length?table(['Quarter','Clock','Team','Play','Away','Home'],plays):'')+section('Play-by-play',playRows.length?table(['Quarter','Clock','Play'],playRows):'');
+ }catch(e){if(location.hash===hash&&token===gameRequest){el.innerHTML=backLink+`<div class="message">${escape(e.message)} — press Refresh to retry.</div>`;}}
+}
+
 function render() {
+  const game=location.hash.match(/^#game\/(\d+)(?:\/(\d+))?$/);
+  if(game){renderGame(game[1],game[2]);return;}
+  delete $("#content").dataset.game;
   const profile=location.hash.match(/^#player\/(\d+)\/(\d+)$/);
   if(profile){if(state.loaded)renderProfile(profile[1],profile[2]);return;}
   document.querySelectorAll("[data-tab]").forEach(button => {
@@ -1035,6 +1064,8 @@ async function refresh() {
 }
 
 document.addEventListener("click", event => {
+  const card=event.target.closest("[data-game]");
+  if(card){event.preventDefault();location.hash=`#game/${card.dataset.game}${card.dataset.origin?"/"+card.dataset.origin:""}`;return;}
   const button = event.target.closest("[data-tab]");
   if (!button) return;
 
@@ -1048,6 +1079,7 @@ document.addEventListener("click", event => {
   }
 });
 
+document.addEventListener("keydown",event=>{if(event.target.matches("[data-game]") && ["Enter"," "].includes(event.key)){event.preventDefault();event.target.click();}});
 document.addEventListener("change", event => {
   if (event.target.id === "week-select") {
     state.week = event.target.value;
