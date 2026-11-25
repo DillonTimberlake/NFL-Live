@@ -293,7 +293,7 @@ footer {
 
 .player-tools{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.player-tools input{background:#172130;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px;min-width:180px}.player-photo{width:58px;height:42px;object-fit:contain}.player-name{display:flex;align-items:center;gap:10px;text-align:left}.player-name:hover{color:var(--blue)}.player-table th button{padding:4px;background:none;border:0;color:inherit}.player-section{margin:20px 0}.player-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.player-tabs .active{border-color:var(--blue);color:var(--blue)}
 .game[data-game]{cursor:pointer}.game[data-game]:hover,.game[data-game]:focus-visible{outline:1px solid #70aaff}.gc-section{margin:30px 0}.gc-section h3,.gc-section h4{margin:20px 0 10px}.gc-score{display:flex;justify-content:space-around;text-align:center;padding:24px;gap:12px}.gc-score img{width:72px;height:72px;object-fit:contain}.gc-score strong{font-size:48px}.gc-score p{text-transform:uppercase}.gc-section td{white-space:normal}</style>
-</head>
+<link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b0e13"><link rel="apple-touch-icon" href="/icon-192.png"><style>.v5grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}.v5card{padding:18px}.v5card a{color:inherit}.v5field{position:relative;height:110px;background:repeating-linear-gradient(90deg,#174b36 0%,#174b36 9.7%,#ffffff70 9.7%,#ffffff70 10%);border:2px solid #b5d4c4;border-radius:8px}.v5ball{position:absolute;top:40%;transform:translateX(-50%);font-size:24px}.v5ticker{display:flex;overflow:auto;gap:18px;padding:12px 0;white-space:nowrap}.v5ticker a{color:inherit}.v5input{padding:10px;background:#18212e;color:#fff;border:1px solid #39485b;border-radius:6px;max-width:100%}nav{flex-wrap:wrap}.v5bar{height:9px;background:#70aaff;border-radius:5px}.v5news img{width:100%;max-height:180px;object-fit:cover}</style></head>
 
 <body>
 <header>
@@ -324,11 +324,11 @@ footer {
   <div id="errors" role="alert"></div>
 
   <nav aria-label="Dashboard navigation">
-    <button data-tab="Standings" class="active">Standings</button>
+    <button data-tab="Home">Home</button><button data-tab="Standings" class="active">Standings</button>
     <button data-tab="Schedule">Schedule</button>
     <button data-tab="Scores">Scores</button>
     <button data-tab="Playoff Picture">Playoff Picture</button>
-    <button data-tab="Leaders">League Leaders</button>
+    <button data-tab="Leaders">League Leaders</button><button data-tab="Compare">Compare</button><button data-tab="Rankings">Rankings</button><button data-tab="News">News</button><button data-tab="Search">Search</button>
   </nav>
 
   <div id="content" aria-live="polite">
@@ -356,7 +356,7 @@ const state = {
   games: [],
   teamGames: [],
   teamScheduleId: "",
-  tab: "Standings",
+  tab: "Home",
   week: "",
   busy: false,
   loaded: false,
@@ -750,7 +750,7 @@ function renderTeam(teamId) {
       </div>
     </section>
 
-    <div class="player-tabs">${["Overview","Schedule","Roster","Player Stats"].map(t=>`<button data-team-view="${t}" class="${teamView===t?"active":""}">${t}</button>`).join("")}</div>
+    <div class="player-tabs">${["Overview","Schedule","Roster","Player Stats","Injuries","Depth Chart"].map(t=>`<button data-team-view="${t}" class="${teamView===t?"active":""}">${t}</button>`).join("")}</div>
     ${teamView === "Roster" || teamView === "Player Stats" ? `<div id="player-area"></div>` : `
     ${teamView === "Overview" ? `<section class="stats">
       ${stats.map(([label,value]) => `
@@ -816,7 +816,7 @@ function renderPlayoffs() {
 
 let teamView="Overview", playerFilter="", positionFilter="", sortIndex=-1, sortDirection=-1, categoryFilter="";
 const playerCache=new Map();
-const seasonNow=()=>state.board?.season?.year||new Date().getFullYear()-(new Date().getMonth()<2?1:0);
+const seasonNow=()=>selectedSeason||state.board?.season?.year||new Date().getFullYear()-(new Date().getMonth()<2?1:0);
 async function playerData(resource,params){const key=JSON.stringify([resource,params]);const old=playerCache.get(key);if(old&&Date.now()-old.time<120000)return old.data;const result=await api(resource,params);playerCache.set(key,{time:Date.now(),data:result.data});return result.data;}
 function athleteOf(a){return a.athlete||a;}
 function playerLink(a,team){a=athleteOf(a);const id=String(a.id||'');const name=a.displayName||a.fullName||a.shortName||'Unknown player';return `<a class="player-name" href="#player/${escape(id)}/${escape(team||'0')}"><img class="player-photo" loading="lazy" src="${escape(a.headshot?.href||`https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`)}" alt="" onerror="this.style.visibility='hidden'"><span>${escape(name)}</span></a>`;}
@@ -837,7 +837,7 @@ async function loadPlayers(team){
  if(token!==viewToken||!$('#player-area'))return;currentDataset={key,groups,roster,errors:failures?`${failures} player or team requests unavailable; results may be incomplete.`:''};drawPlayers();
 }
 function profileTable(data){if(Array.isArray(data.splits?.categories))return data.splits.categories.map(c=>`<h3>${escape(c.displayName||c.name)}</h3>${tableHTML(["Statistic","Value"],c.stats.map(v=>({cells:[escape(v.displayName||v.name),v.displayValue??v.value]})))}`).join("");const groups=statGroups(data);if(groups.length)return groups.map(g=>`<h3>${escape(g.displayName||g.name)}</h3>${tableHTML(['Player',...(g.labels||g.names)],g.athletes.map(a=>({cells:[escape(athleteOf(a).displayName||''),...(a.stats||[])]})))}`).join('');const sections=data.categories||data.statistics?.categories||[];return sections.map(g=>{const labels=g.labels||g.names||[];const rows=(g.events||g.statistics||[]).map(e=>({cells:[escape(e.eventId?data.events?.[e.eventId]?.shortName||e.eventId:e.season?.displayName||e.displayName||'Season'),...(e.stats||e.values||[])]}));return rows.length?`<h3>${escape(g.displayName||g.name)}</h3>${tableHTML(['Season / Game',...labels],rows)}`:'';}).join('');}
-async function renderProfile(id,team){const el=$('#content');el.innerHTML='<div class="message">Loading player profile…</div>';const hash=location.hash;const results=await Promise.allSettled(['player','playerstats','gamelog'].map(resource=>playerData(resource,{player:id,season:seasonNow()})));if(location.hash!==hash)return;const data=results[0].value||{},a=data.athlete||data.player||{};const name=a.displayName||a.fullName||'Player profile';const log=results[2].value||{};const logSections=(log.seasonTypes||[]).flatMap(s=>s.categories||[]);const logHtml=logSections.map(g=>{const rows=(g.events||[]).map(e=>({cells:[escape(log.events?.[e.eventId]?.shortName||e.eventId),...(e.stats||[])]}));return rows.length?tableHTML(['Game',...(log.labels||[])],rows):'';}).join('');el.innerHTML=`<a class="back" href="#team/${escape(team)}">← Team</a><section class="team-hero"><img src="${escape(a.headshot?.href||`https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`)}" alt=""><div><h1>${escape(name)}</h1><p>${escape(a.position?.displayName||a.position?.abbreviation||'')} · ${escape(a.team?.displayName||state.teams.find(t=>t.id===team)?.name||'')} ${a.jersey?' · #'+escape(a.jersey):''}</p></div></section><h2>Season statistics</h2>${profileTable(results[1].value||{})||profileTable(data)||'<p class="notice">Season statistics unavailable in the returned feed.</p>'}<h2>Game log</h2>${logHtml||profileTable(log)||'<p class="notice">Game log unavailable in the returned feed.</p>'}`;}
+async function renderProfile(id,team){const el=$('#content');el.innerHTML='<div class="message">Loading player profile…</div>';const hash=location.hash;const results=await Promise.allSettled(['player','playerstats','gamelog'].map(resource=>playerData(resource,{player:id,season:seasonNow()})));if(location.hash!==hash)return;const data=results[0].value||{},a=data.athlete||data.player||{};const name=a.displayName||a.fullName||'Player profile';const log=results[2].value||{};const logSections=(log.seasonTypes||[]).flatMap(s=>s.categories||[]);const logHtml=logSections.map(g=>{const rows=(g.events||[]).map(e=>({cells:[escape(log.events?.[e.eventId]?.shortName||e.eventId),...(e.stats||[])]}));return rows.length?tableHTML(['Game',...(log.labels||[])],rows):'';}).join('');el.innerHTML=`<a class="back" href="#team/${escape(team)}">← Team</a><section class="team-hero"><img src="${escape(a.headshot?.href||`https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`)}" alt=""><div><h1>${escape(name)}</h1><p>${escape(a.position?.displayName||a.position?.abbreviation||'')} · ${escape(a.team?.displayName||state.teams.find(t=>t.id===team)?.name||'')} ${a.jersey?' · #'+escape(a.jersey):''}</p></div></section><h2>Season statistics</h2>${profileTable(results[1].value||{})||profileTable(data)||'<p class="notice">Season statistics unavailable in the returned feed.</p>'}<h2>Game log</h2>${performance(log)}${logHtml||profileTable(log)||'<p class="notice">Game log unavailable in the returned feed.</p>'}`;}
 document.addEventListener('click',e=>{const b=e.target.closest('[data-team-view]');if(b){teamView=b.dataset.teamView;playerFilter=positionFilter=categoryFilter='';sortIndex=-1;render();}const s=e.target.closest('[data-sort]');if(s&&$('#player-area')){const i=Number(s.dataset.sort);sortDirection=sortIndex===i?-sortDirection:-1;sortIndex=i;drawPlayers();}});
 document.addEventListener('input',e=>{if(e.target.id==='player-search'){playerFilter=e.target.value;const caret=e.target.selectionStart;drawPlayers();$('#player-search')?.focus();$('#player-search')?.setSelectionRange(caret,caret);}});
 document.addEventListener('change',e=>{if(e.target.id==='position-filter'){positionFilter=e.target.value;drawPlayers();}if(e.target.id==='category-filter'){categoryFilter=e.target.value;sortIndex=-1;drawPlayers();}});
@@ -864,7 +864,7 @@ async function renderGame(id,origin){
  const drives=[...(d.drives?.previous||[]),...(d.drives?.current?[d.drives.current]:[])];
  const playRows=drives.flatMap(dr=>dr.plays||[]).map(p=>[p.period?.number,p.clock?.displayValue,p.text]);
  document.title='Game Center | NFL LIVE';
- el.innerHTML=backLink+`<div class="eyebrow">GAME CENTER</div><h1>${escape(d.header?.competitions?.[0]?.status?.type?.description||'Game details')}</h1><div class="panel gc-score">${teams.map(t=>`<div>${logo({...t.team,logo:t.team?.logo||t.team?.logos?.[0]?.href,name:name(t.team)})}<h3>${escape(name(t.team))}</h3><strong>${escape(c.status?.type?.state==='pre'?'—':t.score??'—')}</strong><p>${escape(t.homeAway)}</p></div>`).join('')}</div><p class="muted">${escape(d.gameInfo?.venue?.fullName||'')} · ${escape(c.date?new Date(c.date).toLocaleString():'')} ${response.stale?' · Cached data':''}</p>`+section('Quarter breakdown',periods?table(['Team',...Array.from({length:periods},(_,i)=>i<4?'Q'+(i+1):'OT'+(i===4?'':i-3)),'Total'],teams.map(t=>[name(t.team),...Array.from({length:periods},(_,i)=>t.linescores?.[i]?.displayValue??t.linescores?.[i]?.value??'—'),t.score])):'')+section('Team statistics',teamRows.length?table(['Statistic',...teams.map(t=>name(t.team))],teamRows):'')+section('Player box scores',playerHtml)+section('Scoring summary',plays.length?table(['Quarter','Clock','Team','Play','Away','Home'],plays):'')+section('Play-by-play',playRows.length?table(['Quarter','Clock','Play'],playRows):'');
+ el.innerHTML=backLink+`<div class="eyebrow">GAME CENTER</div><h1>${escape(d.header?.competitions?.[0]?.status?.type?.description||'Game details')}</h1><div class="panel gc-score">${teams.map(t=>`<div>${logo({...t.team,logo:t.team?.logo||t.team?.logos?.[0]?.href,name:name(t.team)})}<h3>${escape(name(t.team))}</h3><strong>${escape(c.status?.type?.state==='pre'?'—':t.score??'—')}</strong><p>${escape(t.homeAway)}</p></div>`).join('')}</div><p class="muted">${escape(d.gameInfo?.venue?.fullName||'')} · ${escape(c.date?new Date(c.date).toLocaleString():'')} ${response.stale?' · Cached data':''}</p>`+gameExtras(d,c)+section('Quarter breakdown',periods?table(['Team',...Array.from({length:periods},(_,i)=>i<4?'Q'+(i+1):'OT'+(i===4?'':i-3)),'Total'],teams.map(t=>[name(t.team),...Array.from({length:periods},(_,i)=>t.linescores?.[i]?.displayValue??t.linescores?.[i]?.value??'—'),t.score])):'')+section('Team statistics',teamRows.length?table(['Statistic',...teams.map(t=>name(t.team))],teamRows):'')+section('Player box scores',playerHtml)+section('Scoring summary',plays.length?table(['Quarter','Clock','Team','Play','Away','Home'],plays):'')+section('Play-by-play',playRows.length?table(['Quarter','Clock','Play'],playRows):'');
  }catch(e){if(location.hash===hash&&token===gameRequest){el.innerHTML=backLink+`<div class="message">${escape(e.message)} — press Refresh to retry.</div>`;}}
 }
 
@@ -872,6 +872,7 @@ function render() {
   const game=location.hash.match(/^#game\/(\d+)(?:\/(\d+))?$/);
   if(game){renderGame(game[1],game[2]);return;}
   delete $("#content").dataset.game;
+  if(!["Compare","Search","News"].includes(state.tab)||location.hash) delete $("#content").dataset.extra;
   const profile=location.hash.match(/^#player\/(\d+)\/(\d+)$/);
   if(profile){if(state.loaded)renderProfile(profile[1],profile[2]);return;}
   document.querySelectorAll("[data-tab]").forEach(button => {
@@ -889,11 +890,14 @@ function render() {
     const team = state.teams.find(t => t.id === teamId);
     document.title = `${team?.name || "Team"} | NFL LIVE`;
     if (["Roster","Player Stats"].includes(teamView)) loadPlayers(teamId);
+    if (["Injuries","Depth Chart"].includes(teamView)) extraTeam(teamId);
+    if(teamView==="Overview") $("#content").insertAdjacentHTML("beforeend",`<button class="v5input" onclick="favorite('${teamId}')">${favorites().includes(teamId)?"★ Remove favorite":"☆ Favorite team"}</button>`);
     return;
   }
 
   document.title = `${state.tab} | NFL LIVE`;
 
+  if (["Home","Compare","Rankings","News","Search"].includes(state.tab)){renderExtra();return;}
   const isGames = ["Schedule","Scores"].includes(state.tab);
 
   let html = `
@@ -964,7 +968,7 @@ function render() {
   } else if (state.tab === "Leaders") {
     html += `<div id="player-area"></div>`;
   } else {
-    html += renderPlayoffs();
+    html += bracket() + renderPlayoffs();
   }
 
   $("#content").innerHTML = html;
@@ -983,7 +987,7 @@ async function refresh() {
 
   try {
     const current = await api("scoreboard");
-    const season = current.data.season?.year;
+    const season = selectedSeason || current.data.season?.year;
 
     if (!season) throw new Error("The feed did not return a season.");
 
@@ -991,8 +995,8 @@ async function refresh() {
       api("standings",{season}),
       teamId
         ? api("schedule",{team:teamId,season})
-        : selectedWeek
-        ? api("scoreboard",{season,week:selectedWeek})
+        : (selectedWeek || selectedSeason)
+        ? api("scoreboard",{season,week:selectedWeek||"1"})
         : Promise.resolve(current),
     ];
 
@@ -1107,6 +1111,27 @@ setInterval(() => {
 document.addEventListener("visibilitychange",() => {
   if (!document.hidden && !state.busy) refresh();
 });
+
+
+let selectedSeason='';
+const favorites=()=>{try{return JSON.parse(localStorage.getItem('nfl-favorites')||'[]')}catch{return []}};
+function favorite(id){const a=favorites();localStorage.setItem('nfl-favorites',JSON.stringify(a.includes(id)?a.filter(x=>x!==id):[...a,id]));render()}
+const v5TeamLink=t=>`<a href="#team/${escape(t.id)}">${logo(t)} ${escape(t.name)}</a>`;
+function bracket(){return `<h2>Projected wild-card matchups</h2><div class="v5grid">${['AFC','NFC'].map(conf=>{const a=state.teams.filter(t=>t.conference===conf);const at=n=>a.find(t=>t.seed===n);return `<div class="panel v5card"><h3>${conf}</h3>${at(1)?v5TeamLink(at(1))+' — bye':''}${[[2,7],[3,6],[4,5]].map(([x,y])=>`<p>${at(y)?v5TeamLink(at(y)):'TBD'} at ${at(x)?v5TeamLink(at(x)):'TBD'}</p>`).join('')}</div>`}).join('')}</div>`}
+function gameExtras(d,c){const l=d.situation||c.situation||{}, y=l.lastPlay?.end?.yardLine;const live=c.status?.type?.state==='in';const venue=d.gameInfo?.venue||{},w=d.gameInfo?.weather||d.weather||{};return `<section class="gc-section"><h2>${live?'Live game tracker':'Game information'}</h2>${live?`<p>${escape(l.downDistanceText||l.lastPlay?.text||'Live situation unavailable')} · ${escape(c.status?.displayClock||'')}</p>${Number.isFinite(y)&&y>=0&&y<=100?`<div class="v5field"><span class="v5ball" style="left:${y}%">🏈</span></div><small>Provider field coordinate: ${y}</small>`:''}`:''}<p>${escape(venue.fullName||'')} ${escape(venue.address?.city||'')} ${escape(venue.address?.state||'')} ${venue.capacity?' · Capacity '+escape(venue.capacity):''} ${venue.grass===true?' · Grass':venue.grass===false?' · Artificial surface':''}</p><p>${escape(w.displayValue||w.conditionId&&w.conditionId.description||'')} ${w.temperature!=null?escape(w.temperature)+'°F':''} ${w.windSpeed!=null?' · Wind '+escape(w.windSpeed)+' mph':''}</p></section>`}
+function performance(log){const labels=log.labels||[];const idx=labels.findIndex(x=>['YDS','PASS YDS','RUSH YDS','REC YDS'].includes(x));if(idx<0)return '';const rows=(log.seasonTypes||[]).flatMap(s=>(s.categories||[]).flatMap(c=>c.events||[])).map(e=>({name:log.events?.[e.eventId]?.shortName||e.eventId,n:Number(String(e.stats?.[idx]??'').replace(/,/g,''))})).filter(e=>Number.isFinite(e.n));const max=Math.max(1,...rows.map(r=>r.n));return rows.length?`<h3>Game-by-game ${escape(labels[idx])}</h3>${rows.map(r=>`<p>${escape(r.name)} · ${r.n}</p><div class="v5bar" style="width:${Math.max(0,r.n/max*100)}%"></div>`).join('')}`:''}
+let extraKey='',extraToken=0;
+function renderExtra(){const el=$('#content'), key=state.tab;if(extraKey===key&&el.dataset.extra===key&&['Compare','Search','News'].includes(key))return;extraKey=key;el.dataset.extra=key;el.innerHTML=`<div class="eyebrow">NFL LIVE 5.0</div><h1>${escape(key)}</h1><div id="extra-body"></div>`;const b=$('#extra-body');if(key==='Home'){const fav=state.teams.filter(t=>favorites().includes(t.id));b.innerHTML=`<p>Season <select id="history-season"><option value="">Current</option>${Array.from({length:15},(_,i)=>new Date().getFullYear()-i).map(y=>`<option ${String(y)===selectedSeason?'selected':''}>${y}</option>`).join('')}</select></p><h2>Score ticker</h2><div class="v5ticker">${(state.board?.events||[]).map(e=>`<a href="#game/${escape(e.id)}">${escape(e.shortName||e.name)} · ${escape(e.competitions?.[0]?.competitors?.map(t=>t.score).join('–')||'')}</a>`).join('')}</div><h2>Favorite teams</h2><div class="v5grid">${(fav.length?fav:state.teams).map(t=>`<div class="panel v5card">${v5TeamLink(t)} <button class="v5input" onclick="favorite('${t.id}')">${favorites().includes(t.id)?'★':'☆'}</button></div>`).join('')}</div><p>Install from your browser menu or iOS Share → Add to Home Screen.</p><button class="v5input" id="notify">Enable score notifications while app is open</button>`;return}if(key==='Rankings'){const rows=[...state.teams].sort((a,b)=>power(b)-power(a));b.innerHTML='<p class="notice">Model: 70% win percentage, 30% point differential per game (scaled). Not official NFL rankings.</p>'+tableHTML(['Rank','Team','Record','Rating'],rows.map((t,i)=>({cells:[i+1,v5TeamLink(t),record(t),power(t).toFixed(1)]})));return}if(key==='News'){loadNews(b);return}b.innerHTML=key==='Search'?'<input class="v5input" id="global-q" placeholder="Search teams, players, games"><div id="global-results"></div>':`<p>Choose two teams or two players.</p><select id="compare-mode"><option value="team">Teams</option><option value="player">Players</option></select><div id="compare-inputs"></div><button class="v5input" id="compare-go">Compare</button><div id="compare-results"></div>`;if(key==='Compare')compareInputs();}
+function power(t){const games=(+t.w||0)+(+t.l||0)+(+t.t||0);return 70*(Number(t.pct)||0)+30*Math.max(0,Math.min(1,.5+(Number(t.diff)||0)/Math.max(1,games)/40))}
+async function loadNews(b){try{const d=await playerData('news',{});if(!b.isConnected)return;b.innerHTML=`<div class="v5grid">${(d.articles||[]).map(a=>{const url=a.links?.web?.href||'';return `<article class="panel v5card v5news"><h3>${escape(a.headline)}</h3><p>${escape(a.description)}</p>${/^https:\/\//.test(url)?`<a href="${escape(url)}" target="_blank" rel="noopener">Read on ESPN</a>`:''}</article>`}).join('')||'News unavailable'}</div>`}catch(e){b.textContent=e.message}}
+async function extraTeam(id){const el=$('#content');const view=teamView;el.insertAdjacentHTML('beforeend','<section id="team-extra" class="gc-section">Loading…</section>');const b=$('#team-extra');try{const d=await playerData(view==='Injuries'?'injuries':'depthcharts',{team:id,season:seasonNow()});if(!b.isConnected||teamView!==view)return;if(view==='Injuries'){const rows=(d.injuries||d.teams||[]).flatMap(x=>x.injuries||[x]).filter(x=>x.athlete);b.innerHTML='<h2>Injuries</h2>'+(rows.length?tableHTML(['Player','Status','Injury'],rows.map(x=>({cells:[playerLink(x.athlete,id),escape(x.status||x.type?.description||'—'),escape(x.details?.type||x.shortComment||'—')]}))):'<p>No injury entries returned.</p>')}else{const charts=d.depthcharts||d.depthCharts||[];b.innerHTML='<h2>Depth chart</h2>'+ (charts.map(c=>`<h3>${escape(c.name||c.displayName)}</h3>`+Object.entries(c.positions||{}).map(([k,v])=>`<p>${escape(v.position?.displayName||k)}: ${(v.athletes||[]).map(a=>playerLink(a.athlete||a,id)).join(' · ')}</p>`).join('')).join('')||'<p>Depth chart unavailable.</p>')}}catch(e){if(b.isConnected)b.textContent=e.message}}
+let rosterIndex=null;async function allRoster(){if(rosterIndex?.season===seasonNow())return rosterIndex.rows;const rows=[];let i=0;await Promise.all(Array.from({length:4},async()=>{while(i<state.teams.length){const t=state.teams[i++];try{const d=await playerData('roster',{team:t.id,season:seasonNow()});rows.push(...rosterRows(d).map(a=>({a:athleteOf(a),team:t.id})))}catch{}}}));rosterIndex={season:seasonNow(),rows};return rows}
+async function compareInputs(){const b=$('#compare-inputs');if(!b)return;const mode=$('#compare-mode').value;let opts=state.teams.map(t=>[t.id,t.name]);if(mode==='player'){b.textContent='Loading rosters…';opts=(await allRoster()).map(({a,team})=>[a.id,`${a.displayName||a.fullName} (${state.teams.find(t=>t.id===team)?.short||''})`]);}if(!b.isConnected||$('#compare-mode').value!==mode)return;b.innerHTML=['a','b'].map(k=>`<select class="v5input" id="cmp-${k}">${opts.map(([id,n])=>`<option value="${escape(id)}">${escape(n)}</option>`).join('')}</select>`).join(' ')}
+async function compareGo(){const b=$('#compare-results'),a=$('#cmp-a')?.value,z=$('#cmp-b')?.value;if(!a||!z)return;const names=['a','b'].map(k=>$('#cmp-'+k).selectedOptions[0].textContent);b.textContent='Loading comparison…';try{if($('#compare-mode').value==='team'){const ts=[a,z].map(id=>state.teams.find(t=>t.id===id));b.innerHTML=tableHTML(['Metric',...names],['w','l','pf','pa','diff','pct'].map(k=>({cells:[k,...ts.map(t=>val(t[k]))]})));return}const ds=await Promise.all([a,z].map(player=>playerData('playerstats',{player,season:seasonNow()})));const maps=ds.map(d=>new Map((d.splits?.categories||[]).flatMap(c=>c.stats.map(v=>[c.name+' / '+v.displayName,v.displayValue]))));if(b.isConnected)b.innerHTML=tableHTML(['Statistic',...names],[...new Set(maps.flatMap(m=>[...m.keys()]))].map(k=>({cells:[escape(k),...maps.map(m=>escape(m.get(k)??'—'))]})))}catch(e){b.textContent=e.message}}
+let searchToken=0;async function globalSearch(q){const token=++searchToken,b=$('#global-results');q=q.trim().toLowerCase();if(!q){b.innerHTML='';return}const teams=state.teams.filter(t=>t.name.toLowerCase().includes(q));const games=state.games.filter(e=>String(e.name||'').toLowerCase().includes(q));b.innerHTML=teams.map(t=>`<p>${v5TeamLink(t)}</p>`).join('')+games.map(e=>`<p><a href="#game/${escape(e.id)}">${escape(e.name)}</a></p>`).join('')+'<p>Searching rosters…</p>';const rows=await allRoster();if(token!==searchToken||!b.isConnected)return;b.innerHTML=teams.map(t=>`<p>${v5TeamLink(t)}</p>`).join('')+games.map(e=>`<p><a href="#game/${escape(e.id)}">${escape(e.name)}</a></p>`).join('')+rows.filter(({a})=>String(a.displayName||a.fullName).toLowerCase().includes(q)).slice(0,100).map(({a,team})=>`<p>${playerLink(a,team)}</p>`).join('')||'No matches';}
+document.addEventListener('change',e=>{if(e.target.id==='history-season'){selectedSeason=e.target.value;state.week='';refresh()}if(e.target.id==='compare-mode')compareInputs()});document.addEventListener('input',e=>{if(e.target.id==='global-q')globalSearch(e.target.value)});document.addEventListener('click',async e=>{if(e.target.id==='compare-go')compareGo();if(e.target.id==='notify'&&'Notification'in window){const permission=await Notification.requestPermission();e.target.textContent=permission==='granted'?'Notifications enabled while open':'Notifications not enabled';}});
+let lastScores=new Map();setInterval(()=>{for(const e of state.board?.events||[]){const score=e.competitions?.[0]?.competitors?.map(t=>t.score).join('–');if(lastScores.has(e.id)&&lastScores.get(e.id)!==score&&window.Notification?.permission==='granted')navigator.serviceWorker?.ready.then(r=>r.showNotification('NFL LIVE',{body:`${e.shortName||e.name}: ${score}`})).catch(()=>{});lastScores.set(e.id,score)}},30000);
+if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
 
 refresh();
 </script>
