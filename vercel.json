@@ -29,13 +29,16 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "/server.mjs"
+      "dest": "/server.mjs",
+      "headers": {
+        "Cache-Control": "no-store"
+      }
     },
     {
       "src": "/(manifest.webmanifest|sw.js|icon-192.png|icon-512.png)",
       "dest": "/$1",
       "headers": {
-        "Cache-Control": "no-cache"
+        "Cache-Control": "no-store"
       }
     },
     {

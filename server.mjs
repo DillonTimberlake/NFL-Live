@@ -54,6 +54,18 @@ async function upstream(url) {
   }
 }
 
+
+function newsPhoto(article) {
+  const images = Array.isArray(article.images) ? article.images : [];
+  for (const item of [...images.filter(i=>i?.type==='header'), ...images, article.image, article.thumbnail]) {
+    const raw = typeof item==='string' ? item : item?.url || item?.href;
+    if (!raw) continue;
+    try { const u=new URL(raw.startsWith('//')?'https:'+raw:raw); if(u.protocol==='http:')u.protocol='https:'; if(allowedPhoto(u))return u.href; } catch {}
+  }
+  return null;
+}
+function allowedPhoto(u) { return u.protocol==='https:' && !u.username && !u.password && !u.port && /(^|\.)(espncdn\.com|espn\.com|espncdn\.net)$/.test(u.hostname); }
+
 export async function handler(req, res) {
   try {
     const incoming = new URL(req.url || "/", "http://localhost");
@@ -67,6 +79,16 @@ export async function handler(req, res) {
       return res.end();
     }
 
+    if (incoming.pathname === "/api/news-image") {
+      let u; try { u=new URL(incoming.searchParams.get('url')); } catch { return send(res,400,{error:'Invalid image'}); }
+      if(!allowedPhoto(u))return send(res,400,{error:'Invalid image host'});
+      const r=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(8000),headers:{Accept:'image/*'}});
+      const type=r.headers.get('content-type')||'';
+      if(!r.ok||!/^image\/(jpeg|png|webp|gif|avif)(;|$)/i.test(type))return send(res,502,{error:'Image unavailable'});
+      const bytes=Buffer.from(await r.arrayBuffer());
+      if(bytes.length>8_000_000)return send(res,502,{error:'Image too large'});
+      res.writeHead(200,{'Content-Type':type,'Cache-Control':'public, max-age=3600','X-Content-Type-Options':'nosniff'});return res.end(bytes);
+    }
     if (incoming.pathname === "/api/nfl") {
       const p = incoming.searchParams;
       const resource = p.get("resource") || "scoreboard";
@@ -178,7 +200,12 @@ export async function handler(req, res) {
           return send(res, 400, { error: "Unknown resource" });
       }
 
-      return send(res, 200, await upstream(url));
+      const result=await upstream(url);
+      if(resource==='news') {
+        const articles=Array.isArray(result.data.articles)?result.data.articles:[];
+        return send(res,200,{...result,data:{...result.data,articles:articles.map(a=>({...a,photoUrl:newsPhoto(a)})),newsVersion:'6.0'}});
+      }
+      return send(res, 200, result);
     }
 
     if (
