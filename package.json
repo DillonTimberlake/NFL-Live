@@ -1,0 +1,6 @@
+{
+  "name": "nfl-live",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.mjs"
+}
