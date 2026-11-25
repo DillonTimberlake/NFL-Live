@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || "127.0.0.1";
 const cache = new Map();
+const CORE = "https://sports.core.api.espn.com/v2/sports/football/leagues/nfl";
 
 const SITE =
   "https://site.api.espn.com/apis/site/v2/sports/football/nfl";
@@ -21,7 +22,7 @@ async function upstream(url) {
   const key = url.toString();
   const saved = cache.get(key);
 
-  if (saved && Date.now() - saved.time < 20_000) {
+  if (saved && Date.now() - saved.time < (key.includes("/statistics") ? 300_000 : 20_000)) {
     return { ...saved.payload, stale: false };
   }
 
@@ -42,7 +43,7 @@ async function upstream(url) {
 
     cache.set(key, { time: Date.now(), payload });
 
-    if (cache.size > 250) {
+    if (cache.size > 5000) {
       cache.delete(cache.keys().next().value);
     }
 
@@ -122,6 +123,20 @@ export async function handler(req, res) {
           url.searchParams.set("seasontype", "2");
           break;
 
+        case "teamplayers": {
+          if (!team || !season) return send(res,400,{error:"Team and season required"});
+          const rosterUrl = new URL(`${SITE}/teams/${team}/roster?season=${season}`);
+          const roster = (await upstream(rosterUrl)).data;
+          const athletes = (roster.athletes || []).flatMap(g=>g.items||[g]).map(a=>a.athlete||a).filter(a=>a.id);
+          const players=[]; let failures=0; let next=0;
+          await Promise.all(Array.from({length:10},async()=>{while(next<athletes.length){const a=athletes[next++];try {
+            const result=await upstream(new URL(`${CORE}/seasons/${season}/types/2/athletes/${a.id}/statistics`));
+            const categories=result.data.splits?.categories;
+            if(!Array.isArray(categories)) {failures++;continue;}
+            players.push({athlete:{...a,team:{id:team}},categories});
+          }catch{failures++;}}}));
+          return send(res,200,{data:{players,failures,total:athletes.length},fetchedAt:new Date().toISOString()});
+        }
         case "leagueplayers": {
           const category = p.get("category") || "passing";
           const sorts = {passing:"passingYards",rushing:"rushingYards",receiving:"receivingYards",defensive:"totalTackles",scoring:"totalTouchdowns",kicking:"fieldGoalsMade",punting:"puntingYards",returning:"kickReturnYards"};
@@ -142,7 +157,10 @@ export async function handler(req, res) {
         case "gamelog":
         case "playerstats":
           if (!player) return send(res,400,{error:"Player required"});
-          url = new URL(`${WEB}/athletes/${player}/${({player:"overview",gamelog:"gamelog",playerstats:"splits"})[resource]}`);
+          if(resource === "playerstats") {
+            if(!season) return send(res,400,{error:"Season required"});
+            url = new URL(`${CORE}/seasons/${season}/types/2/athletes/${player}/statistics`);
+          } else url = new URL(`${WEB}/athletes/${player}/${resource === "player" ? "overview" : "gamelog"}`);
           if (season) url.searchParams.set("season",season);
           break;
         default:
