@@ -122,6 +122,15 @@ export async function handler(req, res) {
           url.searchParams.set("seasontype", "2");
           break;
 
+        case "leagueplayers": {
+          const category = p.get("category") || "passing";
+          const sorts = {passing:"passingYards",rushing:"rushingYards",receiving:"receivingYards",defensive:"totalTackles",scoring:"totalTouchdowns",kicking:"fieldGoalsMade",punting:"puntingYards",returning:"kickReturnYards"};
+          if (!Object.hasOwn(sorts,category)) return send(res,400,{error:"Invalid category"});
+          url = new URL(`${WEB}/statistics/byathlete`);
+          for (const [k,v] of Object.entries({region:"us",lang:"en",contentorigin:"espn",isqualified:"false",limit:"1000",page:"1",sort:`${category}.${sorts[category]}:desc`,seasontype:"2"})) url.searchParams.set(k,v);
+          if(season) url.searchParams.set("season",season);
+          break;
+        }
         case "roster":
         case "teamstats":
           if (!team) return send(res,400,{error:"Team required"});
@@ -133,7 +142,7 @@ export async function handler(req, res) {
         case "gamelog":
         case "playerstats":
           if (!player) return send(res,400,{error:"Player required"});
-          url = new URL(`${WEB}/athletes/${player}/${({player:"overview",gamelog:"gamelog",playerstats:"stats"})[resource]}`);
+          url = new URL(`${WEB}/athletes/${player}/${({player:"overview",gamelog:"gamelog",playerstats:"splits"})[resource]}`);
           if (season) url.searchParams.set("season",season);
           break;
         default:
