@@ -92,7 +92,7 @@ export async function handler(req, res) {
       let url;
 
       switch (resource) {
-        case "news": url=new URL(`${SITE}/news?limit=30`); break;
+        case "news": url=new URL(`${SITE}/news?limit=30`); if(team)url.searchParams.set("team",team); break;
         case "injuries": case "depthcharts":
           if(!team) return send(res,400,{error:"Team required"});
           url=new URL(`${SITE}/teams/${team}/${resource}`); if(season)url.searchParams.set("season",season); break;
