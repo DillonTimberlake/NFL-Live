@@ -53,7 +53,7 @@ async function upstream(url) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+export async function handler(req, res) {
   try {
     const incoming = new URL(req.url || "/", "http://localhost");
 
@@ -85,6 +85,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 400, { error: "Invalid team" });
       }
 
+      const player = p.get("player");
+      if (player && !/^\d{1,10}$/.test(player)) return send(res,400,{error:"Invalid player"});
+      const WEB = "https://site.web.api.espn.com/apis/common/v3/sports/football/nfl";
       let url;
 
       switch (resource) {
@@ -119,6 +122,20 @@ const server = http.createServer(async (req, res) => {
           url.searchParams.set("seasontype", "2");
           break;
 
+        case "roster":
+        case "teamstats":
+          if (!team) return send(res,400,{error:"Team required"});
+          url = new URL(`${SITE}/teams/${team}/${resource === "roster" ? "roster" : "statistics"}`);
+          if (season) url.searchParams.set("season",season);
+          url.searchParams.set("seasontype","2");
+          break;
+        case "player":
+        case "gamelog":
+        case "playerstats":
+          if (!player) return send(res,400,{error:"Player required"});
+          url = new URL(`${WEB}/athletes/${player}/${({player:"overview",gamelog:"gamelog",playerstats:"stats"})[resource]}`);
+          if (season) url.searchParams.set("season",season);
+          break;
         default:
           return send(res, 400, { error: "Unknown resource" });
       }
@@ -141,8 +158,8 @@ const server = http.createServer(async (req, res) => {
       error: "NFL data is temporarily unavailable. Try refreshing.",
     });
   }
-});
-
-server.listen(PORT, HOST, () => {
-  console.log(`NFL LIVE is running at http://${HOST}:${PORT}`);
-});
+}
+export default handler;
+if (!process.env.VERCEL) {
+  http.createServer(handler).listen(PORT, HOST, () => console.log(`NFL LIVE is running at http://${HOST}:${PORT}`));
+}

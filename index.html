@@ -290,6 +290,8 @@ footer {
 @media(prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation:none!important;transition:none!important }
 }
+
+.player-tools{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0}.player-tools input{background:#172130;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px;min-width:180px}.player-photo{width:58px;height:42px;object-fit:contain}.player-name{display:flex;align-items:center;gap:10px;text-align:left}.player-name:hover{color:var(--blue)}.player-table th button{padding:4px;background:none;border:0;color:inherit}.player-section{margin:20px 0}.player-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0}.player-tabs .active{border-color:var(--blue);color:var(--blue)}
 </style>
 </head>
 
@@ -326,6 +328,7 @@ footer {
     <button data-tab="Schedule">Schedule</button>
     <button data-tab="Scores">Scores</button>
     <button data-tab="Playoff Picture">Playoff Picture</button>
+    <button data-tab="Leaders">League Leaders</button>
   </nav>
 
   <div id="content" aria-live="polite">
@@ -747,12 +750,14 @@ function renderTeam(teamId) {
       </div>
     </section>
 
-    <section class="stats">
+    <div class="player-tabs">${["Overview","Schedule","Roster","Player Stats"].map(t=>`<button data-team-view="${t}" class="${teamView===t?"active":""}">${t}</button>`).join("")}</div>
+    ${teamView === "Roster" || teamView === "Player Stats" ? `<div id="player-area"></div>` : `
+    ${teamView === "Overview" ? `<section class="stats">
       ${stats.map(([label,value]) => `
         <article class="panel stat">
           <span>${label}</span><strong>${val(value)}</strong>
         </article>`).join("")}
-    </section>
+    </section>` : ""}
 
     <div class="conference-title">
       <h2>Season schedule</h2><small>REGULAR SEASON</small>
@@ -763,7 +768,7 @@ function renderTeam(teamId) {
       : state.teamGames.length
       ? `<div class="games">${sortedGames(state.teamGames)
           .map(event => gameCard(event,teamId)).join("")}</div>`
-      : '<div class="message">No schedule was returned for this season.</div>'}
+      : '<div class="message">No schedule was returned for this season.</div>'}`}
   `;
 }
 
@@ -808,7 +813,29 @@ function renderPlayoffs() {
     </div>`;
 }
 
+
+let teamView="Overview", playerFilter="", positionFilter="", sortIndex=-1, sortDirection=-1, categoryFilter="";
+const playerCache=new Map();
+const seasonNow=()=>state.board?.season?.year;
+async function playerData(resource,params){const key=JSON.stringify([resource,params]);const old=playerCache.get(key);if(old&&Date.now()-old.time<120000)return old.data;const result=await api(resource,params);playerCache.set(key,{time:Date.now(),data:result.data});return result.data;}
+function athleteOf(a){return a.athlete||a;}
+function playerLink(a,team){a=athleteOf(a);const id=String(a.id||'');const name=a.displayName||a.fullName||a.shortName||'Unknown player';return `<a class="player-name" href="#player/${escape(id)}/${escape(team||'0')}"><img class="player-photo" loading="lazy" src="${escape(a.headshot?.href||`https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`)}" alt="" onerror="this.style.visibility='hidden'"><span>${escape(name)}</span></a>`;}
+function rosterRows(data){return (data.athletes||[]).flatMap(g=>g.items||[g]).filter(a=>athleteOf(a).id);}
+function statGroups(data){const groups=[];function walk(x){if(!x||typeof x!=='object')return;if(Array.isArray(x)){x.forEach(walk);return;}if(Array.isArray(x.athletes)&&Array.isArray(x.labels||x.names)){groups.push(x);return;}Object.values(x).forEach(walk);}walk(data);return groups;}
+function tableHTML(headers,rows){return `<div class="panel table-scroll"><table class="player-table"><thead><tr>${headers.map((x,i)=>`<th><button data-sort="${i}">${escape(x)} ${sortIndex===i?(sortDirection===1?'↑':'↓'):''}</button></th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.cells.map((v,i)=>`<td>${i===0?v:escape(v??'—')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;}
+function sortedRows(rows){return rows.filter(r=>r.name.toLowerCase().includes(playerFilter.toLowerCase())&&(!positionFilter||r.pos===positionFilter)).sort((a,b)=>{if(sortIndex<0)return 0;const x=a.values[sortIndex],y=b.values[sortIndex];const n=Number(String(x).replace(/,/g,'')),m=Number(String(y).replace(/,/g,''));return sortDirection*(Number.isFinite(n)&&Number.isFinite(m)?n-m:String(x??'').localeCompare(String(y??'')));});}
+let viewToken=0, currentDataset=null;
+function drawPlayers(){const el=$('#player-area');if(!el||!currentDataset)return;const {groups,roster,errors}=currentDataset;const positions=[...new Set(roster.map(r=>r.pos).filter(Boolean))].sort();const categories=[...new Set(groups.map(g=>g.name))];const selected=categories.includes(categoryFilter)?categoryFilter:categories[0];const rows=roster.length?roster:groups.filter(g=>g.name===selected).flatMap(g=>g.rows);const headers=roster.length?['Player','Position','No.','Age','Height','Weight']:groups.find(g=>g.name===selected)?.headers||['Player'];el.innerHTML=`<div class="player-tools"><input id="player-search" placeholder="Search players" value="${escape(playerFilter)}">${positions.length?`<select id="position-filter"><option value="">All positions</option>${positions.map(x=>`<option ${x===positionFilter?'selected':''}>${escape(x)}</option>`).join('')}</select>`:''}${categories.length?`<select id="category-filter">${categories.map(x=>`<option ${x===selected?'selected':''}>${escape(x)}</option>`).join('')}</select>`:''}</div>${errors?`<p class="notice">${escape(errors)}</p>`:''}${rows.length?tableHTML(headers,sortedRows(rows)):'<div class="message">No player statistics returned by the provider.</div>'}`;}
+async function loadPlayers(team){const token=++viewToken;const el=$('#player-area');if(!el)return;const rosterMode=team&&teamView==='Roster';const key=`${team}/${rosterMode}/${seasonNow()}`;if(currentDataset?.key===key){drawPlayers();}else el.innerHTML='<div class="message">Loading player data…</div>';const ids=team?[team]:state.teams.map(t=>t.id);const groups=[],roster=[];let failures=0;const results=[];for(let i=0;i<ids.length;i+=6){results.push(...await Promise.allSettled(ids.slice(i,i+6).map(async id=>({id,data:await playerData(rosterMode?'roster':'teamstats',{team:id,season:seasonNow()})}))));if(token!==viewToken)return;}for(const result of results){if(result.status!=='fulfilled'){failures++;continue;}const {id,data}=result.value;if(rosterMode){for(const raw of rosterRows(data)){const a=athleteOf(raw),name=a.displayName||a.fullName||'',pos=a.position?.abbreviation||'';const values=[name,pos,a.jersey,a.age,a.displayHeight,a.displayWeight];roster.push({name,pos,values,cells:[playerLink(a,id),...values.slice(1)]});}}else{for(const g of statGroups(data)){const labels=g.labels||g.names;const name=g.displayName||g.name||'Statistics';const headers=['Player','Team',...labels];const rows=g.athletes.map(raw=>{const a=athleteOf(raw),name=a.displayName||a.fullName||'',short=state.teams.find(t=>t.id===id)?.short||'';const stats=(raw.stats||[]).map(x=>typeof x==='object'?x.displayValue??x.value:x);return {name,pos:a.position?.abbreviation||'',values:[name,short,...stats],cells:[playerLink(a,id),short,...stats]};});groups.push({name,headers,rows});}}}if(token!==viewToken||!$('#player-area'))return;currentDataset={key,groups,roster,errors:failures?`${failures} team feed(s) unavailable; results may be incomplete.`:''};drawPlayers();}
+function profileTable(data){const groups=statGroups(data);if(groups.length)return groups.map(g=>`<h3>${escape(g.displayName||g.name)}</h3>${tableHTML(['Player',...(g.labels||g.names)],g.athletes.map(a=>({cells:[escape(athleteOf(a).displayName||''),...(a.stats||[])]})))}`).join('');const sections=data.categories||data.statistics?.categories||[];return sections.map(g=>{const labels=g.labels||g.names||[];const rows=(g.events||g.statistics||[]).map(e=>({cells:[escape(e.eventId?data.events?.[e.eventId]?.shortName||e.eventId:e.season?.displayName||e.displayName||'Season'),...(e.stats||e.values||[])]}));return rows.length?`<h3>${escape(g.displayName||g.name)}</h3>${tableHTML(['Season / Game',...labels],rows)}`:'';}).join('');}
+async function renderProfile(id,team){const el=$('#content');el.innerHTML='<div class="message">Loading player profile…</div>';const hash=location.hash;const results=await Promise.allSettled(['player','playerstats','gamelog'].map(resource=>playerData(resource,{player:id,season:seasonNow()})));if(location.hash!==hash)return;const data=results[0].value||{},a=data.athlete||data.player||{};const name=a.displayName||a.fullName||'Player profile';const log=results[2].value||{};const logSections=(log.seasonTypes||[]).flatMap(s=>s.categories||[]);const logHtml=logSections.map(g=>{const rows=(g.events||[]).map(e=>({cells:[escape(log.events?.[e.eventId]?.shortName||e.eventId),...(e.stats||[])]}));return rows.length?tableHTML(['Game',...(log.labels||[])],rows):'';}).join('');el.innerHTML=`<a class="back" href="#team/${escape(team)}">← Team</a><section class="team-hero"><img src="${escape(a.headshot?.href||`https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`)}" alt=""><div><h1>${escape(name)}</h1><p>${escape(a.position?.displayName||a.position?.abbreviation||'')} · ${escape(a.team?.displayName||state.teams.find(t=>t.id===team)?.name||'')} ${a.jersey?' · #'+escape(a.jersey):''}</p></div></section><h2>Season statistics</h2>${profileTable(results[1].value||{})||profileTable(data)||'<p class="notice">Season statistics unavailable in the returned feed.</p>'}<h2>Game log</h2>${logHtml||profileTable(log)||'<p class="notice">Game log unavailable in the returned feed.</p>'}`;}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-team-view]');if(b){teamView=b.dataset.teamView;playerFilter=positionFilter=categoryFilter='';sortIndex=-1;render();}const s=e.target.closest('[data-sort]');if(s&&$('#player-area')){const i=Number(s.dataset.sort);sortDirection=sortIndex===i?-sortDirection:-1;sortIndex=i;drawPlayers();}});
+document.addEventListener('input',e=>{if(e.target.id==='player-search'){playerFilter=e.target.value;const caret=e.target.selectionStart;drawPlayers();$('#player-search')?.focus();$('#player-search')?.setSelectionRange(caret,caret);}});
+document.addEventListener('change',e=>{if(e.target.id==='position-filter'){positionFilter=e.target.value;drawPlayers();}if(e.target.id==='category-filter'){categoryFilter=e.target.value;sortIndex=-1;drawPlayers();}});
+
 function render() {
+  const profile=location.hash.match(/^#player\/(\d+)\/(\d+)$/);
+  if(profile){if(state.loaded)renderProfile(profile[1],profile[2]);return;}
   document.querySelectorAll("[data-tab]").forEach(button => {
     const active = button.dataset.tab === state.tab && !currentTeamId();
     button.classList.toggle("active",active);
@@ -823,6 +850,7 @@ function render() {
     $("#content").innerHTML = renderTeam(teamId);
     const team = state.teams.find(t => t.id === teamId);
     document.title = `${team?.name || "Team"} | NFL LIVE`;
+    if (["Roster","Player Stats"].includes(teamView)) loadPlayers(teamId);
     return;
   }
 
@@ -895,11 +923,14 @@ function render() {
       ? `<div class="games">${events.map(event => gameCard(event)).join("")}</div>`
       : `<div class="message">No ${state.tab === "Scores"
           ? "live or completed games" : "games"} for this selection.</div>`;
+  } else if (state.tab === "Leaders") {
+    html += `<div id="player-area"></div>`;
   } else {
     html += renderPlayoffs();
   }
 
   $("#content").innerHTML = html;
+  if(state.tab === "Leaders") loadPlayers("");
 }
 
 async function refresh() {
@@ -1000,7 +1031,7 @@ document.addEventListener("click", event => {
 
   state.tab = button.dataset.tab;
 
-  if (currentTeamId()) {
+  if (location.hash) {
     location.hash = "";
   } else {
     render();
@@ -1018,6 +1049,7 @@ document.addEventListener("change", event => {
 $("#refresh").addEventListener("click",refresh);
 
 window.addEventListener("hashchange",() => {
+  teamView = "Overview";
   render();
   refresh();
   window.scrollTo({top:0,behavior:"auto"});
