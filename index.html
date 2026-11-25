@@ -180,6 +180,7 @@ tr.wildcard td:first-child { border-left-color:var(--blue) }
 tr.clinched td:first-child { border-left-color:var(--green) }
 tr.eliminated td:first-child { border-left-color:var(--red) }
 tr.eliminated { color:var(--muted) }
+td.rank { font-weight:700;font-size:13px }
 .team-link { display:flex;align-items:center;gap:8px;min-width:165px }
 .logo { width:31px;height:31px;object-fit:contain;flex-shrink:0 }
 .team-link small,.seed-name small {
@@ -335,6 +336,8 @@ footer {
     Independent dashboard · Public ESPN data feeds ·
     Times shown in your local timezone · Not affiliated with the NFL or ESPN.
     Current playoff position does not mean a clinched berth.
+    Division ranks use record, then point differential, then points scored;
+    they are not official NFL tiebreakers.
     Win probability is a simple estimate from records and home-field advantage.
   </footer>
 </main>
@@ -465,7 +468,27 @@ function normalize(root) {
   }
 
   walk(root);
-  return [...new Map(result.map(team => [team.id, team])).values()];
+  const teams = [...new Map(result.map(team => [team.id, team])).values()];
+
+  // Fill in division rank for every team, even when the feed leaves it blank.
+  const groups = {};
+  teams.forEach(team => {
+    (groups[team.division] = groups[team.division] || []).push(team);
+  });
+  Object.values(groups).forEach(group => {
+    group.sort(compareWithinDivision);
+    group.forEach((team, index) => { team.rank = index + 1; });
+  });
+
+  return teams;
+}
+
+function compareWithinDivision(a, b) {
+  return (a.rank ?? 99) - (b.rank ?? 99) ||
+    (a.seed ?? 99) - (b.seed ?? 99) ||
+    (b.pct ?? -1) - (a.pct ?? -1) ||
+    (b.diff ?? -9999) - (a.diff ?? -9999) ||
+    (b.pf ?? -1) - (a.pf ?? -1);
 }
 
 function status(team) {
@@ -504,20 +527,16 @@ function teamLink(team) {
 }
 
 function standingsTable(teams) {
-  const ordered = [...teams].sort((a,b) =>
-    (a.rank ?? 99) - (b.rank ?? 99) ||
-    (a.seed ?? 99) - (b.seed ?? 99) ||
-    (b.pct ?? -1) - (a.pct ?? -1)
-  );
+  const ordered = [...teams].sort(compareWithinDivision);
 
   return `<div class="table-scroll"><table>
     <thead><tr>
       ${["Rank","Team","W","L","T","PCT","PF","PA","DIFF","Streak"]
         .map(label => `<th>${label}</th>`).join("")}
     </tr></thead>
-    <tbody>${ordered.map(team => `
+    <tbody>${ordered.map((team, index) => `
       <tr class="${status(team)[0]}">
-        <td>${val(team.rank)}</td>
+        <td class="rank">${index + 1}</td>
         <td>${teamLink(team)}</td>
         <td class="green">${val(team.w)}</td>
         <td>${val(team.l)}</td>
@@ -720,7 +739,7 @@ function renderTeam(teamId) {
         <div class="eyebrow">${escape(team.division)}</div>
         <h1>${escape(team.name)}</h1>
         <p>${escape(team.city)} · ${escape(team.conference)} · ${status(team)[1]}</p>
-        <p>Division rank: ${val(team.rank)} · Streak: ${escape(team.streak)}</p>
+        <p>Division rank: ${val(team.rank)} of 4 · Streak: ${escape(team.streak)}</p>
       </div>
       <div class="big-record">
         ${record(team)}
