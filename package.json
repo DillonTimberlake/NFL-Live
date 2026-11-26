@@ -2,5 +2,8 @@
   "name": "nfl-live",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.mjs"
+  "main": "server.mjs",
+  "dependencies": {
+    "@vercel/analytics": "^2.0.1"
+  }
 }
