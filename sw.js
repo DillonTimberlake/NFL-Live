@@ -1,4 +1,4 @@
-// NFL LIVE 6.2
-self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('nfl-live-')).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',e=>{if(e.request.mode==='navigate'||(new URL(e.request.url).origin===self.location.origin&&new URL(e.request.url).pathname==='/api/nfl'))e.respondWith(fetch(e.request,{cache:'no-store'}));});
+// NFL LIVE 6.4 — no cached HTML or analytics interception
+self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
+self.addEventListener('activate', e => e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('nfl-live-')).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+// No fetch handler: browser and Vercel handle all network requests directly.

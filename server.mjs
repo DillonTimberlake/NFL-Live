@@ -14,6 +14,7 @@ function send(res, status, body, type = "application/json") {
     "Content-Type": `${type}; charset=utf-8`,
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "no-store",
+    ...(type === "text/html" ? { "X-NFL-Live-Version": "6.4" } : {}),
   });
   res.end(type === "application/json" ? JSON.stringify(body) : body);
 }

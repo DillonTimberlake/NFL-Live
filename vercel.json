@@ -42,11 +42,23 @@
       }
     },
     {
-      "src": "/(.*)",
+      "src": "/",
       "dest": "/index.html",
       "headers": {
-        "Cache-Control": "no-store"
+        "Cache-Control": "no-store",
+        "X-NFL-Live-Version": "6.4"
       }
+    },
+    {
+      "src": "/index.html",
+      "dest": "/index.html",
+      "headers": {
+        "Cache-Control": "no-store",
+        "X-NFL-Live-Version": "6.4"
+      }
+    },
+    {
+      "handle": "filesystem"
     }
   ]
 }
